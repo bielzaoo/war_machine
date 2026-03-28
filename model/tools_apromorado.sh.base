@@ -1,0 +1,139 @@
+#!/bin/bash
+
+# =========================
+# 🔐 CHECAGEM DE ROOT
+# =========================
+if [ "$EUID" -ne 0 ]; then
+  printf "[\e[1;31mERROR\e[0m] Execute este script como root (use sudo)\n"
+  exit 1
+fi
+
+# =========================
+# 🎨 CORES
+# =========================
+GREEN="\e[1;32m"
+CYAN="\e[1;36m"
+RED="\e[1;31m"
+RESET="\e[0m"
+
+# =========================
+# 📁 LOG
+# =========================
+LOG_FILE="$HOME/install.log"
+
+# =========================
+# ⏳ SPINNER
+# =========================
+spinner() {
+  local pid=$1
+  local delay=0.1
+  local spinstr='|/-\'
+
+  while ps -p $pid >/dev/null 2>&1; do
+    local temp=${spinstr#?}
+    printf " [%c] " "$spinstr"
+    spinstr=$temp${spinstr%"$temp"}
+    sleep $delay
+    printf "\b\b\b\b\b\b"
+  done
+
+  printf "      \b\b\b\b\b\b"
+}
+
+# =========================
+# 🔇 EXEC COM SPINNER
+# =========================
+run_with_spinner() {
+  ("$@" >>"$LOG_FILE" 2>&1) &
+  local pid=$!
+  spinner $pid
+  wait $pid
+  return $?
+}
+
+# =========================
+# 🔁 RETRY
+# =========================
+retry() {
+  local retries=3
+  local count=0
+  local delay=2
+
+  until "$@"; do
+    exit_code=$?
+    count=$((count + 1))
+
+    if [ $count -lt $retries ]; then
+      printf "[${CYAN}SETUP${RESET}] Tentando novamente ($count/$retries)...\n"
+      sleep $delay
+    else
+      printf "[${RED}ERROR${RESET}] Falhou após $retries tentativas.\n"
+      return $exit_code
+    fi
+  done
+  return 0
+}
+
+# =========================
+# 📢 MENSAGENS
+# =========================
+setup_msg() {
+  printf "[${CYAN}SETUP${RESET}] %s\n" "$1"
+}
+
+install_msg() {
+  printf "[${GREEN}INSTALL${RESET}] %s\n" "$1"
+}
+
+error_msg() {
+  printf "[${RED}ERROR${RESET}] %s\n" "$1"
+}
+
+# =========================
+# 🚀 INÍCIO
+# =========================
+setup_msg "Iniciando ambiente..."
+
+# Atualizar pacotes
+install_msg "Atualizando pacotes..."
+if retry run_with_spinner apt update; then
+  install_msg "apt update OK"
+else
+  error_msg "Falha no apt update (veja $LOG_FILE)"
+fi
+
+# Upgrade do sistema
+install_msg "Atualizando sistema (upgrade)..."
+if retry run_with_spinner apt upgrade -y; then
+  install_msg "Sistema atualizado"
+else
+  error_msg "Falha no upgrade (veja $LOG_FILE)"
+fi
+
+# Instalar dependências
+install_msg "Instalando dependências..."
+if retry run_with_spinner apt install -y git curl build-essential golang; then
+  install_msg "Dependências OK"
+else
+  error_msg "Erro ao instalar dependências"
+fi
+
+# Instalar ferramenta httpx
+install_msg "Instalando httpx..."
+if retry run_with_spinner go install github.com/projectdiscovery/httpx/cmd/httpx@latest; then
+  install_msg "httpx instalado"
+else
+  error_msg "Erro ao instalar httpx"
+fi
+
+# =========================
+# 🧹 LIMPEZA
+# =========================
+install_msg "Removendo pacotes desnecessários..."
+retry run_with_spinner apt autoremove -y
+
+# =========================
+# ✅ FINAL
+# =========================
+setup_msg "Finalizado!"
+setup_msg "Logs disponíveis em: $LOG_FILE"
