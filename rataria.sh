@@ -9,7 +9,7 @@ echo "[subfinder] Executando subfinder..."
 mkdir subfinder
 subfinder_dir="$(pwd)/subfinder"
 subfinder_output="${subfinder_dir}/subfinder_${ALVO}.txt"
-subfinder -d "$ALVO" --all -o "${subfinder_dir}/${subfinder_output}"
+subfinder -silent -d "$ALVO" --all -o "${subfinder_dir}/${subfinder_output}"
 
 echo "[assetfinder] Criando diretorio para resultados..."
 echo "[assetfinder] Executando assetfinder..."
