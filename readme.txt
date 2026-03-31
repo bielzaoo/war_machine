@@ -81,7 +81,7 @@ cat alive_domains.txt | naabu -o cladious-ports.txt
 httpx ===========================================================
 
 httpx ->  para achar servi�os Web.
-cat cladious-ports.txt | httpx -title -sc
+cat cladious-ports.txt | httpx -title -sc -silent 
 httpx -silent -sc -title -tech-detect < 1_subdomains_alive.txt > 1_subdomains_alive-info.txt
 
 
