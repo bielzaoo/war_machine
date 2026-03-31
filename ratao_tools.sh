@@ -485,12 +485,19 @@ else
   fi
 fi
 
+setup_msg "Recarregando configurações do shell..."
+
+if source "$RC_FILE"; then
+  install_msg "PATH atualizado na sessão atual"
+else
+  error_msg "Erro ao recarregar $RC_FILE"
+fi
+
 # =========================
 # 🧹 LIMPEZA
 # =========================
 install_msg "Removendo pacotes desnecessários..."
 retry run_with_spinner apt autoremove -y
-source $RC_FILE
 
 # =========================
 # ✅ FINAL
