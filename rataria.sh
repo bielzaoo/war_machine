@@ -54,7 +54,7 @@ echo "[shuffledns] Executando shuffledns..."
 mkdir "${BASE_DIR}/shuffledns"
 shuffledns_dir="${BASE_DIR}/shuffledns"
 shuffledns_output="${shuffledns_dir}/shuffledns_${ALVO}.txt"
-wget https://wordlists-cdn.assetnote.io/data/manual/best-dns-wordlist.txt -O "$shuffledns_dir/resolvers.txt"
+wget -q https://wordlists-cdn.assetnote.io/data/manual/best-dns-wordlist.txt -O "$shuffledns_dir/resolvers.txt"
 shuffledns -list "$alterx_output" -r "$shuffledns_dir/resolvers.txt" -silent -o "$shuffledns_output"
 
 echo "[dnsx] Criando diretorio para resultados..."
