@@ -308,6 +308,37 @@ else
   error_msg "Erro ao instalar crt"
 fi
 
+# Instalar anew
+install_msg "Instalando anew..."
+
+ANEW_URL="https://github.com/zer0yu/anew/releases/download/v0.1.4/anew-v0.1.4-linux-amd64.tar.gz"
+TMP_FILE="/tmp/anew.tar.gz"
+TMP_DIR="/tmp/anew"
+
+# Criar diretório temporário
+mkdir -p "$TMP_DIR"
+
+if retry run_with_spinner wget -q "$ANEW_URL" -O "$TMP_FILE"; then
+
+  if retry run_with_spinner tar xzf "$TMP_FILE" -C "$TMP_DIR"; then
+
+    if retry run_with_spinner mv "$TMP_DIR/anew" /opt/tools/; then
+      install_msg "anew instalado em /opt/tools"
+    else
+      error_msg "Erro ao mover anew"
+    fi
+
+  else
+    error_msg "Erro ao extrair anew"
+  fi
+
+  # Limpeza
+  rm -rf "$TMP_FILE" "$TMP_DIR"
+
+else
+  error_msg "Erro ao baixar anew"
+fi
+
 # Instalar katana
 install_msg "Instalando katana..."
 
