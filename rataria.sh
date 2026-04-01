@@ -64,6 +64,7 @@ dnsx_dir="${BASE_DIR}/dnsx"
 dnsx_output="${dnsx_dir}/dnsx_${ALVO}.txt"
 cat "$shuffledns_output" | dnsx -silent -o "$dnsx_output"
 cp "$dnsx_output" "$BASE_DIR/alive_domains.txt"
+ALIVE_SUBS_FILE="$BASE_DIR/alive_domains.txt"
 
 echo "[RECON] Iniciando Port Scanning e Service Detection..."
 echo "[naabu] Criando diretorio para resultados..."
@@ -81,3 +82,68 @@ httpx_dir="${BASE_DIR}/httpx"
 httpx_output="${httpx_dir}/httpx_${ALVO}.txt"
 
 cat "$naabu_output" | httpx -title -sc -silent -oa -o "$httpx_output"
+
+echo "[INFO] Começando etapa de crawling partindo de subdominios ativos..."
+
+echo "[CRAWL] Iniciando crawling, buscando por URLs, JS..."
+echo "[katana] Criando diretorio para resultados..."
+echo "[katana] Executando katana..."
+mkdir "${BASE_DIR}/katana"
+katana_dir="${BASE_DIR}/katana"
+katana_output="${katana_dir}/katana_${ALVO}.txt"
+katana -list "$ALIVE_SUBS_FILE" -d 2 -jc -jsl -silent | grep -E '\.js([?#].*)?$' | sort -u >"$katana_output"
+
+echo "[subjs] Criando diretorio para resultados..."
+echo "[subjs] Executando subjs..."
+mkdir "${BASE_DIR}/subjs"
+subjs_dir="${BASE_DIR}/subjs"
+subjs_output="${subjs_dir}/subjs_${ALVO}.txt"
+cat "$ALIVE_SUBS_FILE" | subjs | sort -u >"$subjs_output"
+
+echo "[getjs] Criando diretorio para resultados..."
+echo "[getjs] Executando getjs..."
+mkdir "${BASE_DIR}/getjs"
+getjs_dir="${BASE_DIR}/getjs"
+getjs_output="${getjs_dir}/getjs_${ALVO}.txt"
+cat "$ALIVE_SUBS_FILE" | getjs | sort -u >"$getjs_output"
+
+alive_js_file="$BASE_DIR/all_alive_js.txt"
+
+cp "$katana_output" "$alive_js_file"
+cat "$subjs_output" | anew "$alive_js_file"
+cat "$getjs_output" | anew "$alive_js_file"
+echo "[INFO] Arquivo com todos JS baseados em subdominios ativos, foi criado...."
+
+echo "[INFO] Começando etapa de deep sacnning e crawling partindo de TODOS SUBS..."
+echo "[CRAWL] Iniciando crawling, buscando por URLs, JS..."
+echo "[gau] Criando diretorio para resultados..."
+echo "[gau] Executando gau..."
+mkdir "${BASE_DIR}/gau"
+gau_dir="${BASE_DIR}/gau"
+gau_output="${gau_dir}/gau_${ALVO}.txt"
+gau --subs <"$ALIVE_SUBS_FILE" | grep -E '\.js([?#].*)?$' | sort -u >"$gau_output"
+
+echo "[CRAWL] Iniciando crawling, buscando por URLs, JS..."
+echo "[waybackurls] Criando diretorio para resultados..."
+echo "[waybackurls] Executando waybackurls..."
+mkdir "${BASE_DIR}/waybackurls"
+waybackurls_dir="${BASE_DIR}/waybackurls"
+waybackurls_output="${waybackurls_dir}/waybackurls_${ALVO}.txt"
+waybackurls <"$ALIVE_SUBS_FILE" | grep -E '\.js([?#].*)?$' | sort -u >"$waybackurls_output"
+
+archived_js_file="$BASE_DIR/all_archived_js.txt"
+cp "$gau_output" "$archived_js_file"
+cat "$waybackurls_output" | anew "$archived_js_file"
+echo "[INFO] Arquivo com todos JS baseados em subdominios 'archived', foi criado...."
+
+# Dentro dos Js que foram pegos de fontes arquivada, podem ter
+# Outros JS linkados a eles, portanto, essa aqui vai cobrir eles.``
+cat "$archived_js_file" | subjs | sort -u >"$subjs_dir/from_archived_js.txt"
+cat "$archived_js_file" | getJS | sort -u >"$getjs_dir/from_archived_js.txt"
+
+cat "$subjs_dir/from_archived_js.txt" | anew "$archived_js_file"
+cat "$getjs_dir/from_archived_js.txt" | anew "$archived_js_file"
+
+all_js="$BASE_DIR/all_js.txt"
+cp "$alive_js_file" "$all_js"
+cat "$archived_js_file" | anew "$all_js"
