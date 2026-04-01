@@ -1,0 +1,13 @@
+configuration {
+    modi: "window,run";
+    font: "DejaVu Sans Mono 12";
+    show-icons: true;
+    lines: 15;
+    columns: 3;
+    fuzzy: true;
+    hide-scrollbar: true;
+    fullscreen: false;
+}
+
+@theme "/usr/share/rofi/themes/Arc-Dark.rasi"
+
