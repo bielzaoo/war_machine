@@ -100,18 +100,10 @@ subjs_dir="${BASE_DIR}/subjs"
 subjs_output="${subjs_dir}/subjs_${ALVO}.txt"
 cat "$ALIVE_SUBS_FILE" | subjs | sort -u >"$subjs_output"
 
-echo "[getjs] Criando diretorio para resultados..."
-echo "[getjs] Executando getjs..."
-mkdir "${BASE_DIR}/getjs"
-getjs_dir="${BASE_DIR}/getjs"
-getjs_output="${getjs_dir}/getjs_${ALVO}.txt"
-cat "$ALIVE_SUBS_FILE" | getjs | sort -u >"$getjs_output"
-
 alive_js_file="$BASE_DIR/all_alive_js.txt"
 
 cp "$katana_output" "$alive_js_file"
 cat "$subjs_output" | anew "$alive_js_file"
-cat "$getjs_output" | anew "$alive_js_file"
 echo "[INFO] Arquivo com todos JS baseados em subdominios ativos, foi criado...."
 
 echo "[INFO] Começando etapa de deep sacnning e crawling partindo de TODOS SUBS..."
@@ -139,10 +131,8 @@ echo "[INFO] Arquivo com todos JS baseados em subdominios 'archived', foi criado
 # Dentro dos Js que foram pegos de fontes arquivada, podem ter
 # Outros JS linkados a eles, portanto, essa aqui vai cobrir eles.``
 cat "$archived_js_file" | subjs | sort -u >"$subjs_dir/from_archived_js.txt"
-cat "$archived_js_file" | getJS | sort -u >"$getjs_dir/from_archived_js.txt"
 
 cat "$subjs_dir/from_archived_js.txt" | anew "$archived_js_file"
-cat "$getjs_dir/from_archived_js.txt" | anew "$archived_js_file"
 
 all_js="$BASE_DIR/all_js.txt"
 cp "$alive_js_file" "$all_js"
