@@ -258,7 +258,7 @@ phase_subdomain_enum() {
       dir=$(make_tool_dir "amass")
       local output="${dir}/amass_${ALVO}.txt"
       run_tool "amass" "$output" \
-        "amass enum -d '${ALVO}' -nocolor -silent | grep '${ALVO}' > '${output}'"
+        "amass enum -passive -d '${ALVO}' -nocolor -silent | grep '${ALVO}' > '${output}'"
     }
   fi
 
