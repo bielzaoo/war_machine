@@ -34,12 +34,27 @@ Crawling:
 - linkfinder
 
 Vuln:
+- gf (for pattern match)
+- qsreplace 
 - dalfox (included)
 - nuclei (included)
 - sqlmap (included)
 
+Screenshot:
+- gowitness
+
 Wordlist:
 - Seclist (included)
+
+
+Fast recon workflow ==============================================
+Subds
+- subfinder
+- assetfinder
+- crt.sh 
+
+Crawling.
+=================================================================
 
 crt.sh ====================================================
 curl -s "https://crt.sh/?q=%.example.com&output=json" | jq -r '.[].name_value' | sed 's/\\n/\n/g' | grep -vF '*.' | sort -u > 0_example.com_crt.sh.txt
@@ -84,6 +99,8 @@ httpx ->  para achar servi�os Web.
 cat cladious-ports.txt | httpx -title -sc -silent 
 httpx -silent -sc -title -tech-detect < 1_subdomains_alive.txt > 1_subdomains_alive-info.txt
 
+Para a option fast recon
+httpx -silent -ports 80,443,8080,8000,8888 -threads 200 < 1_subdomains.txt | sort -u > 1_subdomains_alive.txt
 
 JS/Crawling ============================================================
 

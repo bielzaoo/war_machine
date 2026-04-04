@@ -1,0 +1,4 @@
+Features para implementar:
+
+- Flaga para indicar uma ferramente para ser pulada.
+- Possibilidade de executar só o Crawling ou só o recon. 
