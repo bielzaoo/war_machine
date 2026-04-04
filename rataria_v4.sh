@@ -76,7 +76,7 @@ show_banner() {
 
 EOF
     echo -e "${RESET}${DIM}        [ Automated Recon — Pentest & Bug Bounty ]${RESET}"
-    echo -e "${DIM}        [ by bielzao | github.com/bielzao          ]${RESET}"
+    echo -e "${DIM}        [ by bielzao | github.com/bielzaoo          ]${RESET}"
     echo ""
     echo -e "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
     echo ""
