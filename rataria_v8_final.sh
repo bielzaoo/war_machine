@@ -2,7 +2,7 @@
 # =============================================================================
 # rataria.sh — Automated Recon Script for Pentest / Bug Bounty
 # Author : bielzao
-# Version: 3.1
+# Version: 4.0
 # =============================================================================
 
 # ─── STRICT MODE ─────────────────────────────────────────────────────────────
@@ -31,15 +31,20 @@ BASE_DIR="${PWD}"
 readonly BASE_DIR
 
 # ─── ESTADO GLOBAL ────────────────────────────────────────────────────────────
-ALVO=""             # Domínio alvo (validado antes do uso)
+ALVO=""             # Domínio atual em execução (setado pelo loop de targets)
+TARGETS=()          # Lista de domínios alvo (um ou mais via -d / --domain)
 GUIDED="false"      # Modo guiado (pergunta antes de cada tool)
 SIMPLE="false"      # Recon simples (pula fase de DNS)
-SKIP_TOOLS=()       # Lista de tools pré-marcadas para skip via --skip
+SKIP_TOOLS=()       # Tools ignoradas via -S / --skip
+SKIP_PHASES=()      # Fases ignoradas via -P / --skip-phase
+# Nomes válidos de fase para --skip-phase:
+#   enum, dns, ports, web, crawl, archive
+# (abreviações mnemônicas — ver should_run_phase())
 
-# Arquivos centrais que fluem entre as fases
-# Inicializados como string vazia; fases os preenchem antes de usar.
+# Arquivos centrais que fluem entre as fases (resetados por target)
 ALL_SUBS_FILE=""
-ALIVE_SUBS_FILE=""
+ALIVE_SUBS_FILE=""    # Subdominios que resolvem DNS
+ALIVE_WEB_FILE=""     # Hosts que respondem HTTP/HTTPS (saida do httpx)
 ALIVE_JS_FILE=""
 ARCHIVED_JS_FILE=""
 ALL_JS_FILE=""
@@ -86,30 +91,32 @@ EOF
 show_help() {
     show_banner
     echo -e "${BOLD}USAGE:${RESET}"
-    echo -e "  ${GREEN}rataria.sh${RESET} ${CYAN}-d <domain>${RESET} ${YELLOW}[options]${RESET}"
+    echo -e "  ${GREEN}rataria.sh${RESET} ${CYAN}-d <domain> [-d <domain2> ...]${RESET} ${YELLOW}[options]${RESET}"
     echo ""
     echo -e "${BOLD}FLAGS:${RESET}"
-    echo -e "  ${CYAN}-d,  --domain <domain>${RESET}      Domínio alvo (ex: example.com)"
-    echo -e "  ${YELLOW}     --simple${RESET}               Recon simples — pula a fase de DNS"
-    echo -e "  ${YELLOW}     --guided${RESET}               Fluxo guiado — pergunta antes de cada ferramenta"
-    echo -e "  ${CYAN}     --skip  <tool,...>${RESET}      Pula tools específicas (separadas por vírgula)"
-    echo -e "  ${CYAN}-h,  --help${RESET}                 Exibe este menu"
+    echo -e "  ${CYAN}-d,  --domain   <domain>${RESET}        Domínio alvo; repita para múltiplos"
+    echo -e "  ${YELLOW}-s,  --simple${RESET}                   Recon simples — pula a fase de DNS"
+    echo -e "  ${YELLOW}-g,  --guided${RESET}                   Fluxo guiado — pergunta antes de cada tool"
+    echo -e "  ${CYAN}-S,  --skip     <tool,...>${RESET}       Pula tools específicas (vírgula)"
+    echo -e "  ${CYAN}-P,  --skip-phase <phase,...>${RESET}    Pula fases inteiras (vírgula)"
+    echo -e "  ${CYAN}-h,  --help${RESET}                     Exibe este menu"
     echo ""
-    echo -e "${BOLD}MODOS DE RECON:${RESET}"
-    echo -e "  ${DIM}(padrão)${RESET}   Recon Full — fluxo completo com DNS bruteforce"
-    echo -e "  ${YELLOW}--simple${RESET}   Recon Simples — pula a fase de DNS, segue com as demais"
+    echo -e "${BOLD}FASES (para --skip-phase / -P):${RESET}"
+    echo -e "  ${DIM}enum${RESET}      Subdomain Enumeration   ${DIM}dns${RESET}      DNS Bruteforce & Resolution"
+    echo -e "  ${DIM}ports${RESET}     Port Scanning           ${DIM}web${RESET}      Alive Check (httpx)"
+    echo -e "  ${DIM}crawl${RESET}     Crawling (alive)        ${DIM}archive${RESET}  Deep Crawling (archived)"
     echo ""
-    echo -e "${BOLD}PULAR FERRAMENTAS:${RESET}"
-    echo -e "  Via flag ${CYAN}--skip${RESET} (antes de executar):"
-    echo -e "  ${DIM}rataria.sh -d example.com --skip amass,crt${RESET}"
-    echo ""
+    echo -e "${BOLD}MÚLTIPLOS DOMÍNIOS:${RESET}"
+    echo -e "  Cada domínio roda em seu próprio subdiretório dentro do projeto."
+    echo -e "  ${DIM}rataria.sh -d empresa.com -d empresa.com.br -d empresa-inc.com${RESET}"
     echo ""
     echo -e "${BOLD}EXEMPLOS:${RESET}"
     echo -e "  ${DIM}rataria.sh -d example.com${RESET}"
-    echo -e "  ${DIM}rataria.sh -d example.com --simple${RESET}"
-    echo -e "  ${DIM}rataria.sh -d example.com --guided${RESET}"
-    echo -e "  ${DIM}rataria.sh -d example.com --skip amass,crt,shuffledns${RESET}"
-    echo -e "  ${DIM}rataria.sh -d example.com --simple --skip assetfinder${RESET}"
+    echo -e "  ${DIM}rataria.sh -d example.com -s${RESET}"
+    echo -e "  ${DIM}rataria.sh -d example.com -g${RESET}"
+    echo -e "  ${DIM}rataria.sh -d example.com -S amass,crt${RESET}"
+    echo -e "  ${DIM}rataria.sh -d example.com -P dns,ports${RESET}"
+    echo -e "  ${DIM}rataria.sh -d a.com -d b.com -s -S assetfinder${RESET}"
     echo ""
     echo -e "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
     exit 0
@@ -264,7 +271,10 @@ ask_user() {
 # =============================================================================
 make_tool_dir() {
     local tool_name="$1"
-    local dir="${BASE_DIR}/${tool_name}"
+    # Usa TARGET_DIR se definido (dentro do loop de targets), BASE_DIR caso contrário.
+    # Isso garante que cada domínio salva seus arquivos no próprio subdiretório.
+    local base="${TARGET_DIR:-${BASE_DIR}}"
+    local dir="${base}/${tool_name}"
     # [SEC] 700: apenas o dono lê/escreve os dados de recon
     mkdir -p -m 700 "$dir"
     echo "$dir"
@@ -326,6 +336,25 @@ should_run() {
 #
 # Não é uma função pública — usada internamente por run_tool_array.
 # =============================================================================
+
+# =============================================================================
+# should_run_phase <phase_key>
+#
+# Decide se uma fase inteira deve rodar. Retorna 0=executar, 1=pular.
+# Keys válidas: enum, dns, ports, web, crawl, archive
+# Uso: should_run_phase "dns" || return
+# =============================================================================
+should_run_phase() {
+    local phase="${1,,}"
+    local p
+    for p in "${SKIP_PHASES[@]+"${SKIP_PHASES[@]}"}"; do
+        [[ "${p,,}" == "$phase" ]] && {
+            log_skip "Phase '${phase}' — skipped via --skip-phase / -P."
+            return 1
+        }
+    done
+    return 0
+}
 
 # =============================================================================
 # run_tool <tool_name> <output_file> <cmd_string>
@@ -412,6 +441,7 @@ run_tool() {
 # FASE 1 — SUBDOMAIN ENUMERATION (passivo)
 # =============================================================================
 phase_subdomain_enum() {
+    should_run_phase "enum" || return
     log_section "PHASE 1 — Subdomain Enumeration (Passive)"
 
     # ── subfinder ──────────────────────────────────────────────────────────────
@@ -456,15 +486,15 @@ phase_subdomain_enum() {
 
     # ── Consolida todos os subdominios ────────────────────────────────────────
     log_info "Consolidating subdomain results..."
-    ALL_SUBS_FILE="${BASE_DIR}/all_subs.txt"
+    ALL_SUBS_FILE="${TARGET_DIR}/all_subs.txt"
     secure_touch "$ALL_SUBS_FILE"
 
     local f first=true
     for f in \
-        "${BASE_DIR}/subfinder/subfinder_${ALVO}.txt" \
-        "${BASE_DIR}/assetfinder/assetfinder_${ALVO}.txt" \
-        "${BASE_DIR}/amass/amass_${ALVO}.txt" \
-        "${BASE_DIR}/crt.sh/crt.sh_${ALVO}.txt"
+        "${TARGET_DIR}/subfinder/subfinder_${ALVO}.txt" \
+        "${TARGET_DIR}/assetfinder/assetfinder_${ALVO}.txt" \
+        "${TARGET_DIR}/amass/amass_${ALVO}.txt" \
+        "${TARGET_DIR}/crt.sh/crt.sh_${ALVO}.txt"
     do
         [[ -f "$f" ]] || continue
         if $first; then
@@ -489,10 +519,11 @@ phase_subdomain_enum() {
 phase_dns_resolution() {
 
     if [[ "$SIMPLE" == "true" ]]; then
-        log_section "PHASE 2 — DNS Resolution (SKIPPED — simple mode)"
+        should_run_phase "dns" || return
+    log_section "PHASE 2 — DNS Resolution (SKIPPED — simple mode)"
         log_warn "Simple mode active: DNS phase skipped."
         log_info "Deriving alive_domains.txt from all_subs.txt (unvalidated)."
-        ALIVE_SUBS_FILE="${BASE_DIR}/alive_domains.txt"
+        ALIVE_SUBS_FILE="${TARGET_DIR}/alive_domains.txt"
         cp "${ALL_SUBS_FILE}" "$ALIVE_SUBS_FILE"
         chmod 600 "$ALIVE_SUBS_FILE"
         local count; count=$(wc -l < "$ALIVE_SUBS_FILE")
@@ -518,7 +549,7 @@ phase_dns_resolution() {
             local dir; dir=$(make_tool_dir "shuffledns")
             local output="${dir}/shuffledns_${ALVO}.txt"
             local resolvers="${dir}/resolvers.txt"
-            local alterx_out="${BASE_DIR}/alterx/alterx_${ALVO}.txt"
+            local alterx_out="${TARGET_DIR}/alterx/alterx_${ALVO}.txt"
             [[ -f "$alterx_out" ]] || alterx_out="$ALL_SUBS_FILE"
 
             # [SEC] Download com verificação de HTTPS (wget valida TLS por padrão).
@@ -552,20 +583,20 @@ phase_dns_resolution() {
         check_tool dnsx && {
             local dir; dir=$(make_tool_dir "dnsx")
             local output="${dir}/dnsx_${ALVO}.txt"
-            local shuffledns_out="${BASE_DIR}/shuffledns/shuffledns_${ALVO}.txt"
+            local shuffledns_out="${TARGET_DIR}/shuffledns/shuffledns_${ALVO}.txt"
             [[ -f "$shuffledns_out" ]] || shuffledns_out="$ALL_SUBS_FILE"
 
             run_tool "dnsx" "$output" \
                 "dnsx -silent -o '${output}' < '${shuffledns_out}'"
 
             if [[ -f "$output" ]]; then
-                cp "$output" "${BASE_DIR}/alive_domains.txt"
-                chmod 600 "${BASE_DIR}/alive_domains.txt"
+                cp "$output" "${TARGET_DIR}/alive_domains.txt"
+                chmod 600 "${TARGET_DIR}/alive_domains.txt"
             fi
         }
     fi
 
-    ALIVE_SUBS_FILE="${BASE_DIR}/alive_domains.txt"
+    ALIVE_SUBS_FILE="${TARGET_DIR}/alive_domains.txt"
     if [[ ! -f "$ALIVE_SUBS_FILE" ]]; then
         secure_touch "$ALIVE_SUBS_FILE"
         log_warn "No alive_domains.txt produced. Subsequent phases may be empty."
@@ -576,36 +607,69 @@ phase_dns_resolution() {
 }
 
 # =============================================================================
-# FASE 3 — PORT SCANNING
+# FASE 3 — ALIVE CHECK (httpx)
+#
+# Verifica quais subdominios respondem via HTTP/HTTPS.
+# Entrada : ALIVE_SUBS_FILE (saida da fase de DNS, ou all_subs.txt no --simple)
+# Saida   : ALIVE_WEB_FILE  (hosts web ativos, usado pelas fases de crawling)
+# Executada ANTES do port scanning para confirmar hosts web-acessiveis.
+# =============================================================================
+phase_alive_check() {
+    should_run_phase "web" || return
+    log_section "PHASE 3 — Alive Check (Web Services)"
+
+    ALIVE_WEB_FILE="${TARGET_DIR}/alive_web.txt"
+
+    if should_run "httpx"; then
+        check_tool httpx && {
+            local dir; dir=$(make_tool_dir "httpx")
+            local output="${dir}/httpx_${ALVO}.txt"
+            # Le diretamente de ALIVE_SUBS_FILE -- sem dependencia do naabu
+            run_tool "httpx" "$output" \
+                "httpx -title -sc -silent -oa -o '${output}' < '${ALIVE_SUBS_FILE}'"
+
+            # Exporta apenas as URLs para ALIVE_WEB_FILE (entrada do crawling)
+            if [[ -f "$output" ]]; then
+                awk '{print $1}' "$output" | sort -u > "$ALIVE_WEB_FILE" \
+                    || secure_touch "$ALIVE_WEB_FILE"
+                chmod 600 "$ALIVE_WEB_FILE"
+            else
+                secure_touch "$ALIVE_WEB_FILE"
+            fi
+        }
+    else
+        # httpx pulado -- cria arquivo vazio para nao quebrar o fluxo
+        secure_touch "$ALIVE_WEB_FILE"
+    fi
+
+    local count; count=$(wc -l < "$ALIVE_WEB_FILE")
+    log_success "Web-alive hosts: ${count} -> alive_web.txt"
+}
+
+# =============================================================================
+# FASE 4 — PORT SCANNING (naabu)
+#
+# Opera sobre ALIVE_WEB_FILE (hosts confirmados web-ativos pelo httpx).
+# Fallback para ALIVE_SUBS_FILE se a fase anterior foi pulada.
 # =============================================================================
 phase_port_scan() {
-    log_section "PHASE 3 — Port Scanning & Service Detection"
+    should_run_phase "ports" || return
+    log_section "PHASE 4 — Port Scanning & Service Detection"
+
+    # Prefere alive_web.txt; cai para alive_domains.txt se necessario
+    local scan_input
+    if [[ -n "${ALIVE_WEB_FILE:-}" && -s "${ALIVE_WEB_FILE}" ]]; then
+        scan_input="$ALIVE_WEB_FILE"
+    else
+        scan_input="$ALIVE_SUBS_FILE"
+    fi
 
     if should_run "naabu"; then
         check_tool naabu && {
             local dir; dir=$(make_tool_dir "naabu")
             local output="${dir}/naabu_${ALVO}.txt"
             run_tool "naabu" "$output" \
-                "naabu -silent -o '${output}' < '${ALIVE_SUBS_FILE}'"
-        }
-    fi
-}
-
-# =============================================================================
-# FASE 4 — WEB SERVICE DISCOVERY
-# =============================================================================
-phase_web_discovery() {
-    log_section "PHASE 4 — Web Service Discovery"
-
-    local naabu_out="${BASE_DIR}/naabu/naabu_${ALVO}.txt"
-    [[ -f "$naabu_out" ]] || naabu_out="$ALIVE_SUBS_FILE"
-
-    if should_run "httpx"; then
-        check_tool httpx && {
-            local dir; dir=$(make_tool_dir "httpx")
-            local output="${dir}/httpx_${ALVO}.txt"
-            run_tool "httpx" "$output" \
-                "httpx -title -sc -silent -oa -o '${output}' < '${naabu_out}'"
+                "naabu -silent -o '${output}' < '${scan_input}'"
         }
     fi
 }
@@ -614,6 +678,7 @@ phase_web_discovery() {
 # FASE 5 — CRAWLING (subdominios ativos)
 # =============================================================================
 phase_crawl_alive() {
+    should_run_phase "crawl" || return
     log_section "PHASE 5 — Crawling (Alive Subdomains)"
 
     # ── katana ────────────────────────────────────────────────────────────────
@@ -638,9 +703,9 @@ phase_crawl_alive() {
     fi
 
     # ── Consolida JS de fontes ativas ─────────────────────────────────────────
-    ALIVE_JS_FILE="${BASE_DIR}/all_alive_js.txt"
-    local katana_out="${BASE_DIR}/katana/katana_${ALVO}.txt"
-    local subjs_out="${BASE_DIR}/subjs/subjs_${ALVO}.txt"
+    ALIVE_JS_FILE="${TARGET_DIR}/all_alive_js.txt"
+    local katana_out="${TARGET_DIR}/katana/katana_${ALVO}.txt"
+    local subjs_out="${TARGET_DIR}/subjs/subjs_${ALVO}.txt"
 
     if [[ -f "$katana_out" ]]; then
         cp "$katana_out" "$ALIVE_JS_FILE"
@@ -658,6 +723,7 @@ phase_crawl_alive() {
 # FASE 6 — DEEP CRAWLING (fontes arquivadas)
 # =============================================================================
 phase_crawl_archived() {
+    should_run_phase "archive" || return
     log_section "PHASE 6 — Deep Crawling (Archived Sources)"
 
     # ── gau ───────────────────────────────────────────────────────────────────
@@ -681,9 +747,9 @@ phase_crawl_archived() {
     fi
 
     # ── Consolida JS arquivados ───────────────────────────────────────────────
-    ARCHIVED_JS_FILE="${BASE_DIR}/all_archived_js.txt"
-    local gau_out="${BASE_DIR}/gau/gau_${ALVO}.txt"
-    local wb_out="${BASE_DIR}/waybackurls/waybackurls_${ALVO}.txt"
+    ARCHIVED_JS_FILE="${TARGET_DIR}/all_archived_js.txt"
+    local gau_out="${TARGET_DIR}/gau/gau_${ALVO}.txt"
+    local wb_out="${TARGET_DIR}/waybackurls/waybackurls_${ALVO}.txt"
 
     if [[ -f "$gau_out" ]]; then
         cp "$gau_out" "$ARCHIVED_JS_FILE"
@@ -695,7 +761,7 @@ phase_crawl_archived() {
 
     # JS secundários linkados dentro dos JS arquivados (cobertura extra)
     if check_tool subjs; then
-        local from_archived="${BASE_DIR}/subjs/from_archived_js.txt"
+        local from_archived="${TARGET_DIR}/subjs/from_archived_js.txt"
         log_info "Extracting secondary JS from archived JS files..."
         subjs < "$ARCHIVED_JS_FILE" | sort -u > "$from_archived"
         chmod 600 "$from_archived"
@@ -712,7 +778,7 @@ phase_crawl_archived() {
 phase_consolidate() {
     log_section "PHASE 7 — Final Consolidation"
 
-    ALL_JS_FILE="${BASE_DIR}/all_js.txt"
+    ALL_JS_FILE="${TARGET_DIR}/all_js.txt"
 
     if [[ -f "${ALIVE_JS_FILE}" ]]; then
         cp "$ALIVE_JS_FILE" "$ALL_JS_FILE"
@@ -733,7 +799,9 @@ phase_consolidate() {
     echo -e "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
     echo -e "  ${CYAN}Recon mode                   :${RESET} ${recon_mode}"
     echo -e "  ${CYAN}Unique subdomains found       :${RESET} ${all_count}"
-    echo -e "  ${CYAN}Alive domains                 :${RESET} ${alive_count}"
+    echo -e "  ${CYAN}Alive domains (DNS)           :${RESET} ${alive_count}"
+    local web_count; web_count=$(wc -l < "${ALIVE_WEB_FILE:-/dev/null}" 2>/dev/null || echo 0)
+    echo -e "  ${CYAN}Web-alive hosts (httpx)       :${RESET} ${web_count}"
     echo -e "  ${CYAN}Total JS files                :${RESET} ${js_count}"
     echo -e "  ${CYAN}Project directory             :${RESET} ${BASE_DIR}"
     echo -e "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
@@ -753,19 +821,28 @@ while [[ $# -gt 0 ]]; do
             [[ -z "${2:-}" || "${2:-}" == -* ]] && {
                 echo -e "${RED}[ERROR]${RESET} --domain requires a value."; exit 1
             }
-            ALVO="$2"; shift 2
+            # [SEC] Cada domínio é validado imediatamente ao ser lido
+            validate_domain "$2"
+            TARGETS+=("$2"); shift 2
             ;;
-        --simple)
+        -s|--simple)
             SIMPLE="true"; shift
             ;;
-        --guided)
+        -g|--guided)
             GUIDED="true"; shift
             ;;
-        --skip)
+        -S|--skip)
             [[ -z "${2:-}" || "${2:-}" == -* ]] && {
-                echo -e "${RED}[ERROR]${RESET} --skip requires a comma-separated list."; exit 1
+                echo -e "${RED}[ERROR]${RESET} --skip / -S requires a comma-separated list of tools."; exit 1
             }
             IFS=',' read -ra SKIP_TOOLS <<< "$2"
+            shift 2
+            ;;
+        -P|--skip-phase)
+            [[ -z "${2:-}" || "${2:-}" == -* ]] && {
+                echo -e "${RED}[ERROR]${RESET} --skip-phase / -P requires a comma-separated list of phases."; exit 1
+            }
+            IFS=',' read -ra SKIP_PHASES <<< "$2"
             shift 2
             ;;
         -h|--help)
@@ -779,13 +856,23 @@ while [[ $# -gt 0 ]]; do
 done
 
 # ── Validações finais ─────────────────────────────────────────────────────────
-if [[ -z "$ALVO" ]]; then
-    echo -e "${RED}[ERROR]${RESET} Domain not specified. Use -d <domain>."
+if [[ ${#TARGETS[@]} -eq 0 ]]; then
+    echo -e "${RED}[ERROR]${RESET} No domain specified. Use -d <domain>."
     show_help
 fi
 
-# [SEC] Valida o domínio antes de qualquer execução
-validate_domain "$ALVO"
+# [SEC] Valida fases informadas em --skip-phase
+_VALID_PHASES=(enum dns ports web crawl archive)
+for _p in "${SKIP_PHASES[@]+"${SKIP_PHASES[@]}"}"; do
+    _found=false
+    for _v in "${_VALID_PHASES[@]}"; do
+        [[ "${_p,,}" == "$_v" ]] && { _found=true; break; }
+    done
+    [[ "$_found" == false ]] && {
+        echo -e "${RED}[ERROR]${RESET} Unknown phase: '${_p}'. Valid: ${_VALID_PHASES[*]}"
+        exit 1
+    }
+done
 
 # [SEC] Verifica que BASE_DIR existe e é de fato um diretório
 if [[ ! -d "$BASE_DIR" ]]; then
@@ -798,21 +885,65 @@ fi
 # =============================================================================
 show_banner
 
-log_info "Target  : ${GREEN}${ALVO}${RESET}"
+# Sumário geral antes de iniciar
+log_info "Targets : ${GREEN}${TARGETS[*]}${RESET}"
 log_info "Mode    : ${YELLOW}$( [[ "$SIMPLE" == "true" ]] && echo "Simple Recon" || echo "Full Recon (default)" )${RESET}"
 log_info "Guided  : ${YELLOW}${GUIDED}${RESET}"
-# [SEC] Guarda com ${SKIP_TOOLS+x} verifica se o array foi definido antes
-#       de checar seu tamanho — forma correta com set -u ativo em bash.
 if [[ -n "${SKIP_TOOLS+x}" && ${#SKIP_TOOLS[@]} -gt 0 ]]; then
-    log_info "Skipping: ${YELLOW}${SKIP_TOOLS[*]}${RESET}"
+    log_info "Skip tools  : ${YELLOW}${SKIP_TOOLS[*]}${RESET}"
 fi
-log_info "Dir     : ${BASE_DIR}"
+if [[ -n "${SKIP_PHASES+x}" && ${#SKIP_PHASES[@]} -gt 0 ]]; then
+    log_info "Skip phases : ${YELLOW}${SKIP_PHASES[*]}${RESET}"
+fi
+log_info "Base dir: ${BASE_DIR}"
 echo ""
 
-phase_subdomain_enum
-phase_dns_resolution
-phase_port_scan
-phase_web_discovery
-phase_crawl_alive
-phase_crawl_archived
-phase_consolidate
+# =============================================================================
+# LOOP PRINCIPAL — itera sobre cada domínio alvo
+#
+# Estrutura de diretórios:
+#   <BASE_DIR>/
+#     <domain1>/          ← TARGET_DIR de cada domínio
+#       subfinder/
+#       amass/
+#       all_subs.txt
+#       alive_domains.txt
+#       ...
+#     <domain2>/
+#       ...
+#
+# Cada domínio é completamente isolado. As variáveis de arquivo globais
+# (ALL_SUBS_FILE, ALIVE_SUBS_FILE, etc.) são resetadas a cada iteração.
+# =============================================================================
+_TOTAL=${#TARGETS[@]}
+_IDX=0
+
+for ALVO in "${TARGETS[@]}"; do
+    _IDX=$(( _IDX + 1 ))
+
+    # Subdiretório exclusivo para este domínio
+    TARGET_DIR="${BASE_DIR}/${ALVO}"
+    mkdir -p -m 700 "$TARGET_DIR"
+
+    # Reseta arquivos centrais para este target
+    ALL_SUBS_FILE=""
+    ALIVE_SUBS_FILE=""
+    ALIVE_WEB_FILE=""
+    ALIVE_JS_FILE=""
+    ARCHIVED_JS_FILE=""
+    ALL_JS_FILE=""
+
+    echo ""
+    echo -e "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+    echo -e "${BOLD}  TARGET ${_IDX}/${_TOTAL} — ${GREEN}${ALVO}${RESET}"
+    echo -e "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+    echo ""
+
+    phase_subdomain_enum
+    phase_dns_resolution
+    phase_alive_check     # 3. Alive check via httpx (antes do port scan)
+    phase_port_scan       # 4. Port scanning sobre hosts web confirmados
+    phase_crawl_alive
+    phase_crawl_archived
+    phase_consolidate
+done
