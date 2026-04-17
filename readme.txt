@@ -149,3 +149,21 @@ while read -r url; do
     curl -skLf --compressed "$url" -o "js_files/${hash}.js"
 done < all_js_files.txt
 
+===========================================================
+JS FLOW
+
+Coletar JS
+katana - esse ativo, cuidado ao executar em alvos.
+getjs para unfcionar precisa ter httop ou https
+subjs para funcioar precisa ter http ou https
+gau - tem function de threads, pdoe diexar mais rapido.
+junta tudo em um arquivo.
+
+Endpoints dos JS--------
+Linkfinder - um url por vez
+xnLinkFinder (Olhar)
+
+Encontrar secrets nos JS ---------
+SecretFinder
+TruffleHog
+git-secrets
