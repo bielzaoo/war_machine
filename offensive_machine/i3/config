@@ -226,6 +226,3 @@ bindsym $mod+p exec flameshot gui
 
 # Wallpaper
 exec_always --no-startup-id sh ~/.config/i3/.fehbg
-
-# picom
-exec_always picom --config ~/.config/picom/picom.conf
