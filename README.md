@@ -1,14 +1,37 @@
-# kali-setup
+# war_machine
 
-Bootstrap de uma VM Kali Linux mínima: i3 + Alacritty + tmux + zsh/starship,
-tema vanta black + cyan (`#00f0ff`).
+Bootstrap de uma VM Kali Linux enxuta: i3 + kitty/Alacritty + tmux +
+zsh/starship, tema vanta black + cyan (`#00f0ff`), com terminal "vidro" sem
+compositor (ver [Terminal vidro](#terminal-vidro-sem-picom)).
 
-Resultado esperado: **~2.5 GB em disco**, **~520 MB de RAM em idle**, boot em
-torno de 6s — contra ~12 GB e ~1.2 GB de um Kali com XFCE padrão.
+Resultado esperado na base mínima: **~2.5 GB em disco**, **~520 MB de RAM em
+idle**, boot em torno de 6s — contra ~12 GB e ~1.2 GB de um Kali com XFCE padrão.
 
 ---
 
-## Pré-requisito: instalar o Kali sem nada
+## Qual imagem usar
+
+O site do Kali oferece duas, e o script funciona nas duas:
+
+| | ISO **installer** (`*-installer-amd64.iso`) | Imagem **QEMU** (`*-qemu-amd64.7z`) |
+|---|---|---|
+| O que é | instalador; você escolhe o que entra | disco `qcow2` já instalado |
+| Desktop | nenhum (se desmarcar tudo) | XFCE + lightdm |
+| Ferramentas | nenhuma (instala sob demanda) | o pacote `default` inteiro |
+| Disco | ~2.5 GB | ~15 GB descompactado |
+| Tempo até usar | instalação de ~15 min | importar e bootar |
+| Login | o que você criar | `kali` / `kali` — **troque** |
+| O script faz | sobe i3 no tty1 | desliga o lightdm e sobe i3 no tty1 |
+
+**Regra prática:** VM de longa duração e leve → installer. VM descartável pra
+um lab/CTF, com as ferramentas já lá → QEMU.
+
+Na imagem QEMU o script **não desinstala** o XFCE: só desliga o display
+manager (`systemctl disable lightdm` + boot em `multi-user.target`). O ganho de
+RAM é o mesmo, o disco não muda, e volta atrás com `./install.sh --keep-dm`
+(que mantém o lightdm e põe o i3 como sessão no login gráfico).
+
+## Pré-requisito (ISO installer): instalar o Kali sem nada
 
 Na tela **Software selection** do instalador, **desmarque todas as caixas** —
 inclusive `default -- recommended tools`, que é a que traz as centenas de
@@ -24,12 +47,15 @@ oferece essa tela).
 
 ```bash
 sudo apt update && sudo apt install -y git
-git clone <url-do-repo> ~/kali-setup
-cd ~/kali-setup
+git clone https://github.com/bielzaoo/war_machine.git ~/war_machine
+cd ~/war_machine
 ./install.sh
 ```
 
-Reinicie. O i3 sobe sozinho no tty1.
+Reinicie. O i3 sobe sozinho no tty1 (logue no tty1 com seu usuário).
+
+Precisa de um tarball em vez de clone? `git archive --format=tar.gz
+--prefix=war_machine/ -o war_machine.tar.gz HEAD` gera um a partir do repo.
 
 ### Opções
 
@@ -37,6 +63,8 @@ Reinicie. O i3 sobe sozinho no tty1.
 |---|---|
 | `--no-ssh` | não instala nem endurece o `sshd` |
 | `--no-font` | pula o download da Nerd Font (~30 MB) |
+| `--no-glass` | sem kitty/ImageMagick: só Alacritty sólido (o mais leve) |
+| `--keep-dm` | imagem QEMU: mantém o lightdm e adiciona o i3 como sessão |
 
 O script é **idempotente** — pode rodar quantas vezes quiser. Configs
 existentes que difiram são salvas como `.bak-<timestamp>`, e os blocos em
@@ -49,7 +77,8 @@ duplicados.
 
 | Tecla | Ação | | Tecla | Ação |
 |---|---|---|---|---|
-| `Mod+Enter` | terminal | | `Mod+D` | dmenu |
+| `Mod+Enter` | terminal (vidro) | | `Mod+D` | dmenu |
+| `Mod+Shift+Enter` | terminal sólido | | `Mod+Shift+G` | liga/desliga vidro |
 | `Mod+Q` | fechar janela | | `Mod+F` | fullscreen |
 | `Mod+H/J/K/L` | foco | | `Mod+Shift+H/J/K/L` | mover janela |
 | `Mod+1..0` | workspace | | `Mod+Shift+1..0` | mover p/ workspace |
@@ -66,7 +95,52 @@ transferência.
 ## Wallpaper
 
 Jogue uma imagem em `~/.config/wallpapers/` e recarregue o i3 (`Mod+Shift+C`).
-Sem imagem, o fundo fica preto sólido. Nenhuma edição de config é necessária.
+Sem imagem, usa um padrão gerado na primeira vez (preto + brilho cyan com
+scanlines). Nenhuma edição de config é necessária.
+
+## Terminal vidro (sem picom)
+
+Transparência de verdade no X precisa de compositor (picom). Numa VM sem
+aceleração 3D o compositor roda na CPU (llvmpipe): cada frame da tela inteira
+é recomposto em software, e blur é o pior caso. Daí a VM pesada.
+
+O truque aqui é **não compor nada em tempo real**:
+
+1. `wallpaper.sh` gera, **uma vez por imagem**, uma versão desfocada e
+   escurecida do wallpaper em `~/.cache/war_machine/term-bg.png`
+   (reduz → desfoca → amplia: blur pesado por uma fração do custo).
+2. O kitty desenha essa imagem como fundo próprio (`background_image`). Custo
+   em runtime: uma textura atrás do texto, sem compositor e sem blur por frame.
+3. No i3 em tiling, atrás do terminal só existe o wallpaper — então o "vidro
+   fosco" fica visualmente igual ao efeito real.
+
+Ajustes:
+
+| Quero | Faço |
+|---|---|
+| texto mais legível / fundo mais escuro | `echo 75 > ~/.config/war_machine/dim` + `Mod+Shift+C` (0-100, padrão 62) |
+| desligar o vidro nos próximos terminais | `Mod+Shift+G` (de novo religa) |
+| um terminal o mais leve possível agora | `Mod+Shift+Enter` (Alacritty sólido) |
+| nunca instalar kitty/ImageMagick | `./install.sh --no-glass` |
+
+O kitty vem afinado pra VM: `sync_to_monitor no`, cursor sem piscar (piscar
+força redesenho constante) e `term xterm-256color` — o `xterm-kitty` padrão não
+existe nos alvos, e ssh, shells reversos e `nc` quebram sem isso.
+
+### Quero transparência real mesmo assim: virgl
+
+Sem GPU dedicada ainda dá pra usar a **GPU integrada do host** pela VM com
+virgl (OpenGL paravirtualizado). Só funciona com o viewer local
+(virt-manager/virt-viewer na mesma máquina), não por SPICE remoto:
+
+```bash
+sudo virt-xml kali --edit --video model.type=virtio,model.acceleration.accel3d=yes
+sudo virt-xml kali --edit --graphics type=spice,gl.enable=yes,listen=none
+```
+
+Na VM, `glxinfo -B | grep renderer` deve mostrar `virgl` em vez de `llvmpipe`.
+Aí um picom com `backend = "glx"` e sem blur fica aceitável. É experimento,
+não o padrão: se travar, volte com `accel3d=no` e `gl.enable=no`.
 
 ---
 
@@ -80,6 +154,8 @@ Sem imagem, o fundo fica preto sólido. Nenhuma edição de config é necessári
 `firefox-esr`, `dnsutils`, `git`, `build-essential`
 
 **Tema:** `adwaita-icon-theme`, `gnome-themes-extra`, `xsettingsd`
+
+**Vidro** (pula com `--no-glass`): `kitty`, `imagemagick`
 
 Rede é gerenciada por `nmtui` / `nmcli` — sem applet de bandeja, para não
 arrastar dependências GTK do GNOME.
@@ -101,7 +177,9 @@ Tudo em vanta black + cyan (`#00f0ff`):
 |---|---|
 | i3 (bordas, gaps) | `config/i3/config` |
 | i3bar + i3status | `config/i3/config`, `config/i3status/config` |
-| Alacritty | `config/alacritty/alacritty.toml` |
+| kitty (vidro) | `config/kitty/kitty.conf` + `config/scripts/term.sh` |
+| Alacritty (sólido) | `config/alacritty/alacritty.toml` |
+| wallpaper + fundo do terminal | `config/scripts/wallpaper.sh` |
 | tmux | `config/tmux.conf` |
 | starship | `config/starship.toml` |
 | dunst | `config/dunst/dunstrc` |
@@ -120,6 +198,32 @@ novo.
 ---
 
 ## Notas de VM (libvirt/QEMU)
+
+### Imagem QEMU pronta
+
+```bash
+sudo mkdir -p /var/lib/libvirt/images/kali
+sudo chattr +C /var/lib/libvirt/images/kali    # desativa CoW do Btrfs
+sudo 7z x ~/Downloads/kali-linux-VERSAO-qemu-amd64.7z -o/var/lib/libvirt/images/kali/
+qemu-img info /var/lib/libvirt/images/kali/kali-linux-VERSAO-qemu-amd64.qcow2   # tamanho virtual
+
+sudo virt-install \
+  --name kali \
+  --memory 8192 \
+  --vcpus 4,sockets=1,cores=2,threads=2 \
+  --cpu host-passthrough \
+  --disk path=/var/lib/libvirt/images/kali/kali-linux-VERSAO-qemu-amd64.qcow2,format=qcow2,bus=virtio,discard=unmap \
+  --import \
+  --network network=default,model=virtio \
+  --graphics spice --video virtio \
+  --osinfo debian12 --memballoon virtio --noautoconsole
+```
+
+Login `kali` / `kali`. Primeira coisa: `passwd`. Depois clone o repo e rode
+`./install.sh` normalmente (de dentro do XFCE mesmo: o lightdm só sai no
+próximo boot, a sessão atual não cai).
+
+### ISO installer
 
 Criação da VM no host:
 

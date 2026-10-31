@@ -4,7 +4,8 @@
 # =====================================================================
 
 set $mod Mod4
-set $term alacritty
+# term.sh: kitty com fundo "vidro" se ligado, senao alacritty solido
+set $term $HOME/.config/scripts/term.sh
 
 # --- Paleta -----------------------------------------------------------
 set $bg        #000000
@@ -44,7 +45,11 @@ exec --no-startup-id dunst
 # =====================================================================
 
 # --- Essenciais -------------------------------------------------------
-bindsym $mod+Return exec $term
+bindsym $mod+Return exec --no-startup-id $term
+# terminal solido (alacritty), o mais leve - para sessao longa/pesada
+bindsym $mod+Shift+Return exec --no-startup-id $term --solid
+# liga/desliga o vidro para os proximos terminais
+bindsym $mod+Shift+g exec --no-startup-id $term --toggle
 bindsym $mod+d exec --no-startup-id dmenu_run -fn 'JetBrainsMono Nerd Font-10' -nb '#000000' -nf '#c8d3d5' -sb '#00f0ff' -sf '#000000' -p 'run:'
 bindsym $mod+q kill
 bindsym $mod+Shift+q kill

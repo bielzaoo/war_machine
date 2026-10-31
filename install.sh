@@ -1,15 +1,20 @@
 #!/usr/bin/env bash
 # =====================================================================
-#  Kali minimal VM - setup automatizado
+#  war_machine - setup automatizado de VM Kali
 #
-#  Parte de uma instalacao Kali sem nenhum desktop environment
-#  (todas as caixas desmarcadas em "Software selection") e entrega
-#  i3 + Alacritty + tmux + zsh/starship, tema vanta black + cyan.
+#  Entrega i3 + kitty/Alacritty + tmux + zsh/starship, tema vanta
+#  black + cyan. Funciona nas duas bases:
+#    - ISO installer, sem nenhum desktop ("Software selection" vazio)
+#    - imagem QEMU pronta (XFCE + lightdm): o i3 assume e o lightdm
+#      e desligado (reversivel), liberando RAM
 #
 #  Uso:
 #     ./install.sh              # tudo
 #     ./install.sh --no-ssh     # pula o endurecimento do SSH
 #     ./install.sh --no-font    # pula o download da Nerd Font
+#     ./install.sh --no-glass   # sem kitty/vidro: so Alacritty solido
+#     ./install.sh --keep-dm    # imagem QEMU: mantem o lightdm e
+#                               # adiciona o i3 como sessao
 # =====================================================================
 
 set -euo pipefail
@@ -20,12 +25,16 @@ STAMP="$(date +%Y%m%d-%H%M%S)"
 
 DO_SSH=1
 DO_FONT=1
+DO_GLASS=1
+KEEP_DM=0
 for arg in "$@"; do
     case "$arg" in
-        --no-ssh)  DO_SSH=0 ;;
-        --no-font) DO_FONT=0 ;;
+        --no-ssh)   DO_SSH=0 ;;
+        --no-font)  DO_FONT=0 ;;
+        --no-glass) DO_GLASS=0 ;;
+        --keep-dm)  KEEP_DM=1 ;;
         -h|--help)
-            sed -n '2,14p' "${BASH_SOURCE[0]}" | sed 's/^# \?//'
+            sed -n '2,19p' "${BASH_SOURCE[0]}" | sed 's/^# \?//'
             exit 0 ;;
         *) echo "opcao desconhecida: $arg" >&2; exit 1 ;;
     esac
@@ -76,6 +85,20 @@ ensure_block() {
 [ "$(id -u)" -eq 0 ] && die "rode como usuario normal, nao root (o script usa sudo onde precisa)"
 command -v sudo >/dev/null 2>&1 || die "sudo nao encontrado"
 [ -d "$CONFIG_SRC" ] || die "diretorio config/ nao encontrado ao lado do script"
+
+# --- qual base? -------------------------------------------------------
+# A imagem QEMU pronta vem com XFCE + lightdm; o ISO installer (sem nada
+# marcado) nao tem display manager. O alias display-manager.service aponta
+# para o DM ativo, se houver.
+DM=""
+if [ -L /etc/systemd/system/display-manager.service ]; then
+    DM="$(basename "$(readlink -f /etc/systemd/system/display-manager.service)")"
+fi
+if [ -n "$DM" ]; then
+    info "base: imagem com desktop (display manager: ${DM})"
+else
+    info "base: instalacao minima (sem display manager)"
+fi
 
 # =====================================================================
 #  1. Pacotes
@@ -129,9 +152,25 @@ info "instalando camada grafica (com recommends)"
 # shellcheck disable=SC2086
 sudo apt-get install -y $PKGS_X
 
+# Vidro: kitty desenha imagem de fundo sem compositor; ImageMagick gera
+# (uma vez) a versao desfocada do wallpaper que vai atras do texto.
+PKGS_GLASS="
+kitty
+imagemagick
+"
+
 info "instalando stack principal"
 # shellcheck disable=SC2086
 sudo apt-get install -y --no-install-recommends $PKGS_MIN
+
+if [ "$DO_GLASS" -eq 1 ]; then
+    info "instalando terminal vidro (kitty + imagemagick)"
+    # shellcheck disable=SC2086
+    sudo apt-get install -y --no-install-recommends $PKGS_GLASS || \
+        warn "falhou instalar kitty/imagemagick - segue com Alacritty solido"
+else
+    info "pulando terminal vidro (--no-glass)"
+fi
 
 # firefox-esr pode nao existir dependendo do momento do repo Kali
 if ! command -v firefox-esr >/dev/null 2>&1 && ! command -v firefox >/dev/null 2>&1; then
@@ -185,6 +224,7 @@ fi
 install_config "${CONFIG_SRC}/i3/config"                "${HOME}/.config/i3/config"
 install_config "${CONFIG_SRC}/i3status/config"          "${HOME}/.config/i3status/config"
 install_config "${CONFIG_SRC}/alacritty/alacritty.toml" "${HOME}/.config/alacritty/alacritty.toml"
+install_config "${CONFIG_SRC}/kitty/kitty.conf"         "${HOME}/.config/kitty/kitty.conf"
 install_config "${CONFIG_SRC}/dunst/dunstrc"            "${HOME}/.config/dunst/dunstrc"
 install_config "${CONFIG_SRC}/starship.toml"            "${HOME}/.config/starship.toml"
 install_config "${CONFIG_SRC}/tmux.conf"                "${HOME}/.tmux.conf"
@@ -205,7 +245,7 @@ export XCURSOR_THEME=Adwaita
 export XCURSOR_SIZE=24'
 
 mkdir -p "${HOME}/.config/scripts" "${HOME}/.config/wallpapers" "${HOME}/Pictures/screenshots"
-for s in wallpaper.sh screenshot.sh; do
+for s in wallpaper.sh screenshot.sh term.sh; do
     install_config "${CONFIG_SRC}/scripts/${s}" "${HOME}/.config/scripts/${s}"
     chmod +x "${HOME}/.config/scripts/${s}"
 done
@@ -214,9 +254,21 @@ cat > "${HOME}/.config/wallpapers/README" << 'EOF'
 Coloque uma imagem (.jpg .jpeg .png .webp .bmp) neste diretorio e
 recarregue o i3 com Mod+Shift+C.
 
-Sem imagem aqui, o fundo fica preto solido (#000000).
+Sem imagem aqui, usa um padrao gerado (preto + brilho cyan) se o
+ImageMagick estiver instalado, ou preto solido se nao.
 Se houver mais de uma, a primeira em ordem alfabetica e usada.
+
+O fundo do terminal kitty e a mesma imagem desfocada e escurecida,
+gerada uma vez em ~/.cache/war_machine/term-bg.png. Para escurecer
+mais/menos (0-100, padrao 62):
+    echo 75 > ~/.config/war_machine/dim     e depois Mod+Shift+C
 EOF
+
+# --no-glass depois de uma instalacao com vidro: desliga sem desinstalar
+if [ "$DO_GLASS" -eq 0 ]; then
+    mkdir -p "${HOME}/.config/war_machine"
+    : > "${HOME}/.config/war_machine/solid"
+fi
 
 # --- Firefox: tema escuro no chrome do navegador ---
 # O user.js so pode ser aplicado depois que o perfil existe. Se o Firefox
@@ -262,6 +314,31 @@ ensure_block "${HOME}/.zprofile" "kali-setup autostart i3" \
     exec startx
 fi'
 
+# --- imagem QEMU (lightdm + XFCE) --------------------------------------
+# Padrao: desliga o display manager e boota em modo texto; o login no tty1
+# sobe o i3 via startx (bloco acima). Sem lightdm + XFCE em memoria a VM
+# fica bem mais leve. Nada e desinstalado: e reversivel com --keep-dm.
+# Nao paramos o DM agora - isso derrubaria a sessao grafica de quem roda
+# o script de dentro do XFCE. Vale a partir do proximo boot.
+if [ -n "$DM" ]; then
+    if [ "$KEEP_DM" -eq 1 ]; then
+        sudo systemctl enable "$DM" >/dev/null 2>&1 || true
+        sudo systemctl set-default graphical.target >/dev/null
+        if [ "$DM" = "lightdm.service" ]; then
+            sudo mkdir -p /etc/lightdm/lightdm.conf.d
+            printf '[Seat:*]\nuser-session=i3\n' | \
+                sudo tee /etc/lightdm/lightdm.conf.d/60-war-machine.conf >/dev/null
+        fi
+        printf '[Desktop]\nSession=i3\n' > "${HOME}/.dmrc"
+        info "${DM} mantido; i3 definido como sessao (confira no menu de sessao do login)"
+    else
+        sudo systemctl disable "$DM" >/dev/null 2>&1 || true
+        sudo systemctl set-default multi-user.target >/dev/null
+        info "${DM} desligado - proximo boot cai no tty1 e o i3 sobe sozinho"
+        info "para voltar ao login grafico: ./install.sh --keep-dm"
+    fi
+fi
+
 # =====================================================================
 #  7. spice-vdagent
 # =====================================================================
@@ -298,13 +375,20 @@ else
 fi
 
 # =====================================================================
+# --- senha padrao da imagem pronta ------------------------------------
+# A imagem QEMU vem com kali/kali. Com SSH ligado isso e porta aberta.
+if [ "$USER" = "kali" ]; then
+    warn "usuario 'kali' detectado: se a senha ainda for a padrao (kali), troque com: passwd"
+fi
+
 info "concluido"
 cat << 'EOF'
 
   Reinicie a VM (ou saia e logue de novo no tty1) para o i3 subir sozinho.
 
   Atalhos principais (Mod = Super):
-    Mod+Enter          terminal          Mod+D              dmenu
+    Mod+Enter          terminal (vidro)  Mod+D              dmenu
+    Mod+Shift+Enter    terminal solido   Mod+Shift+G        liga/desliga vidro
     Mod+Q              fechar janela     Mod+F              fullscreen
     Mod+H/J/K/L        foco              Mod+Shift+H/J/K/L  mover janela
     Mod+1..0           workspace         Mod+Shift+1..0     mover p/ workspace
