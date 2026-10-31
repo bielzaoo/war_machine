@@ -1,0 +1,44 @@
+add_newline = false
+
+format = """
+[](#00f0ff)\
+$username\
+[](bg:#1a1a1a fg:#00f0ff)\
+$directory\
+[](fg:#1a1a1a bg:#0a0a0a)\
+$git_branch\
+$git_status\
+[ ](fg:#0a0a0a)\
+$cmd_duration\
+$line_break\
+$character"""
+
+[username]
+show_always = true
+style_user = "bg:#00f0ff fg:#000000 bold"
+style_root = "bg:#ff3b5c fg:#000000 bold"
+format = '[ $user ]($style)'
+
+[directory]
+style = "bg:#1a1a1a fg:#00f0ff"
+format = "[ $path ]($style)"
+truncation_length = 3
+truncation_symbol = "…/"
+
+[git_branch]
+symbol = ""
+style = "bg:#0a0a0a fg:#c8d3d5"
+format = '[ $symbol $branch ]($style)'
+
+[git_status]
+style = "bg:#0a0a0a fg:#ff3b5c"
+format = '[$all_status$ahead_behind ]($style)'
+
+[cmd_duration]
+min_time = 2000
+style = "fg:#5a6567"
+format = " [ $duration]($style)"
+
+[character]
+success_symbol = "[❯](bold #00f0ff)"
+error_symbol = "[❯](bold #ff3b5c)"
