@@ -245,7 +245,7 @@ export XCURSOR_THEME=Adwaita
 export XCURSOR_SIZE=24'
 
 mkdir -p "${HOME}/.config/scripts" "${HOME}/.config/wallpapers" "${HOME}/Pictures/screenshots"
-for s in wallpaper.sh screenshot.sh term.sh; do
+for s in wallpaper.sh screenshot.sh term.sh vm-autoresize.sh; do
     install_config "${CONFIG_SRC}/scripts/${s}" "${HOME}/.config/scripts/${s}"
     chmod +x "${HOME}/.config/scripts/${s}"
 done

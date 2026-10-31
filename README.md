@@ -301,8 +301,15 @@ e aperte uma seta no menu. Caiu na voz? `sudo virsh destroy kali` e
   `PKGS_X` **com** recommends e só corta no resto.
 - **`--video virtio` em vez de QXL.** Com QXL o `spice-vdagent` procura
   `/dev/dri/card0` enquanto o dispositivo enumera como `card1`, e o
-  redimensionamento dinâmico não funciona. Com virtio-gpu funciona sem
-  `xrandr` fixo.
+  redimensionamento dinâmico não funciona.
+- **Com virtio-gpu, quem aplica a resolução nova é você, não o agente.** Ao
+  redimensionar a janela do viewer, o QEMU muda o modo *preferido* do monitor
+  virtual (`xrandr` mostra `1364x673 +` com `current 1280 x 800`) e dispara um
+  hotplug no DRM. GNOME/KDE aplicam sozinhos; o i3 não, e o `spice-vdagent -d`
+  nem vê pedido de resize. O `config/scripts/vm-autoresize.sh` escuta
+  `udevadm monitor --subsystem-match=drm` e roda `xrandr --auto` (e redesenha o
+  wallpaper). Sobe pelo i3; fora de VM sai na hora. No virt-manager, deixe
+  ligado **View → Scale Display → Auto resize VM with window**.
 - **`spice-vdagentd` é ativado por socket.** `systemctl enable spice-vdagentd`
   falha por não haver seção `[Install]` — o alvo correto é
   `spice-vdagentd.socket`.

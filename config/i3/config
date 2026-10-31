@@ -38,6 +38,8 @@ exec --no-startup-id $HOME/.config/scripts/wallpaper.sh
 exec --no-startup-id xrdb -merge $HOME/.Xresources
 exec --no-startup-id xsettingsd
 exec --no-startup-id /usr/bin/spice-vdagent
+# resolucao acompanha a janela do virt-manager (virtio-gpu; no-op fora de VM)
+exec --no-startup-id $HOME/.config/scripts/vm-autoresize.sh
 exec --no-startup-id dunst
 
 # =====================================================================
