@@ -210,13 +210,13 @@ qemu-img info /var/lib/libvirt/images/kali/kali-linux-VERSAO-qemu-amd64.qcow2   
 sudo virt-install \
   --name kali \
   --memory 8192 \
-  --vcpus 4,sockets=1,cores=2,threads=2 \
+  --vcpus 6,sockets=1,cores=3,threads=2 \
   --cpu host-passthrough \
   --disk path=/var/lib/libvirt/images/kali/kali-linux-VERSAO-qemu-amd64.qcow2,format=qcow2,bus=virtio,discard=unmap \
   --import \
   --network network=default,model=virtio \
   --graphics spice --video virtio \
-  --osinfo debian12 --memballoon virtio --noautoconsole
+  --osinfo debian12 --memballoon virtio,freePageReporting=on --noautoconsole
 ```
 
 Login `kali` / `kali`. Primeira coisa: `passwd`. Depois clone o repo e rode
@@ -234,14 +234,14 @@ sudo chattr +C /var/lib/libvirt/images/kali    # desativa CoW do Btrfs
 sudo virt-install \
   --name kali \
   --memory 8192 \
-  --vcpus 4,sockets=1,cores=2,threads=2 \
+  --vcpus 6,sockets=1,cores=3,threads=2 \
   --cpu host-passthrough \
   --disk path=/var/lib/libvirt/images/kali/kali.qcow2,size=40,format=qcow2,bus=virtio,discard=unmap \
   --disk path=/var/lib/libvirt/images/kali-linux-VERSAO-installer-amd64.iso,device=cdrom,bus=sata,readonly=on \
   --boot cdrom,hd \
   --network network=default,model=virtio \
   --graphics spice --video virtio \
-  --osinfo debian12 --memballoon virtio --noautoconsole
+  --osinfo debian12 --memballoon virtio,freePageReporting=on --noautoconsole
 ```
 
 Depois da instalação, **remova o ISO** ou a VM volta a bootar pelo CD:
@@ -250,7 +250,47 @@ Depois da instalação, **remova o ISO** ou a VM volta a bootar pelo CD:
 sudo virsh change-media kali sda --eject --config
 ```
 
+**Memória:** 8 GB dão folga pro Burp (heap de ~4 GB) + Firefox. Com
+`freePageReporting=on` a VM devolve ao host o que libera: parada, custa ~600 MB
+do host, não 8 GB. Se o `virt-install` recusar a opção, tire-a e ligue depois
+com `sudo virsh edit kali` → `<memballoon model='virtio' freePageReporting='on'/>`.
+Alternativa manual: `--memory 4096,maxmemory=8192` e `sudo virsh setmem kali 8G
+--live` na hora de usar o Burp.
+
+**vCPUs:** vCPU ociosa não custa nada ao host; 6 de 12 threads sobra bem.
+
+**Abra o console antes do menu de boot.** Com `--noautoconsole` a tela não
+abre sozinha, e o menu do instalador tem timer de ~30s: sem tecla, ele escolhe
+a instalação **com síntese de voz**. Use
+`virt-viewer -c qemu:///system kali` (ou o virt-manager) logo após criar a VM
+e aperte uma seta no menu. Caiu na voz? `sudo virsh destroy kali` e
+`sudo virsh start kali` — nada foi instalado ainda.
+
 ### Armadilhas encontradas
+
+- **umask restritivo (ex.: `0027` de hardening) → `Permission denied` como
+  `uid 960`.** `sudo mkdir` cria a pasta como `drwxr-x--- root`, e o QEMU roda
+  como `libvirt-qemu`, que não entra nela. Idem para a ISO baixada como
+  `rw-r-----`. Correção: `sudo chmod 755 /var/lib/libvirt/images/kali` e
+  `sudo chmod 644` + `chown root:root` na ISO.
+- **Firewall do host com `policy drop` → instalador "não acha a rede".** DHCP e
+  DNS das VMs são servidos pelo dnsmasq **do host**: o pedido entra pela
+  `virbr0` na chain `input`. E a saída para a internet passa pela `forward`.
+  No nftables um `drop` em qualquer base chain do hook vence o `accept` das
+  tabelas do libvirt. Liberar só o necessário:
+  ```
+  # chain input
+  iifname "virbr0" udp dport { 53, 67 } accept
+  iifname "virbr0" tcp dport 53 accept
+  # chain forward
+  iifname "virbr0" accept
+  oifname "virbr0" ct state established,related accept
+  ```
+  E **não** usar `flush ruleset` no `/etc/nftables.conf`: apaga as tabelas do
+  libvirt junto. Recriar só a própria tabela (`table inet filter` /
+  `delete table inet filter` / `table inet filter { ... }`). Se já apagou:
+  `sudo virsh net-destroy default && sudo virsh net-start default`. Com UFW o
+  sintoma é o mesmo (`ufw allow in on virbr0` + `ufw route allow in on virbr0`).
 
 - **ISO precisa estar em `/var/lib/libvirt/images/`.** O qemu não atravessa um
   home com permissão `700`; o sintoma é o instalador caindo no shell do
