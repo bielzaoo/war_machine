@@ -1,0 +1,43 @@
+name: lint
+
+on:
+  push:
+  pull_request:
+
+# Menor privilegio: o job so le o repo
+permissions:
+  contents: read
+
+jobs:
+  shell:
+    runs-on: ubuntu-24.04
+    steps:
+      # action fixada por SHA (tag e mutavel; SHA nao). v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+
+      - name: shellcheck
+        # shellcheck ja vem na imagem ubuntu do GitHub
+        run: |
+          shellcheck --version
+          shellcheck -S warning install.sh bin/engage bin/sessao config/scripts/*.sh
+
+      - name: sintaxe (bash -n / sh -n)
+        run: |
+          for f in install.sh bin/engage config/scripts/*.sh; do bash -n "$f"; done
+          sh -n bin/sessao
+
+      - name: tmux.conf carrega
+        run: |
+          sudo apt-get install -y -qq tmux >/dev/null
+          # source-file sai != 0 e imprime a linha se houver erro de parse
+          tmux -L ci -f /dev/null new-session -d 'sleep 30'
+          tmux -L ci source-file config/tmux.conf
+          tmux -L ci kill-server
+
+      - name: dry-run nao altera nada
+        run: |
+          export HOME="$(mktemp -d)"
+          ./install.sh --dry-run --tools --no-tz
+          test -z "$(find "$HOME" -mindepth 1 -print -quit)"

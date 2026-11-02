@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+# engage - pasta padrao de engagement/lab + sessao tmux com log de evidencia
+#
+#   engage <alvo>   cria (ou reabre) ~/engagements/<alvo>, marca como ativo
+#                   e entra na sessao tmux dele
+#   engage          mostra o ativo e lista os engagements
+#   engage -x       desmarca o ativo
+#
+# Ativo = ~/.config/war_machine/engagement. Ele aparece na barra do i3 e
+# manda os screenshots (Mod+Shift+S / Print) pra <alvo>/screens/.
+# Todo painel tmux aberto dentro da pasta grava em <alvo>/logs/.
+
+set -euo pipefail
+
+ENG_ROOT="${WAR_ENGAGEMENTS:-${HOME}/engagements}"
+ACTIVE="${HOME}/.config/war_machine/engagement"
+
+usage() { sed -n '2,12p' "$0" | sed 's/^# \?//'; }
+
+case "${1:-}" in
+    -h|--help) usage; exit 0 ;;
+    -x)
+        rm -f "$ACTIVE"
+        echo "nenhum engagement ativo"
+        exit 0
+        ;;
+    "")
+        if [ -s "$ACTIVE" ]; then
+            echo "ativo: $(cat "$ACTIVE")"
+        else
+            echo "ativo: nenhum"
+        fi
+        if [ -d "$ENG_ROOT" ]; then
+            echo "em ${ENG_ROOT/#"$HOME"/\~}:"
+            find "$ENG_ROOT" -mindepth 1 -maxdepth 1 -type d -printf '  %f\n' | sort
+        fi
+        exit 0
+        ;;
+    -*) usage >&2; exit 1 ;;
+esac
+
+# nome vira pasta e sessao tmux: so caracteres seguros
+alvo="$(printf '%s' "$1" | tr -c 'A-Za-z0-9._-' '-')"
+dir="${ENG_ROOT}/${alvo}"
+
+if [ ! -d "$dir" ]; then
+    mkdir -p "$dir"/{nmap,web,loot,screens,logs,notes}
+    chmod 700 "$dir"            # loot e credenciais: so o dono le
+    cat > "$dir/notes/README.md" << EOF
+# ${alvo}
+
+Inicio: $(date +%Y-%m-%d)
+
+## Escopo
+- Alvos / ranges:
+- Fora de escopo:
+- Regras / janela:
+
+## Credenciais
+| usuario | segredo | origem | onde vale |
+|---|---|---|---|
+
+## Achados
+-
+
+## Timeline
+- $(date '+%Y-%m-%d %H:%M') engagement criado
+EOF
+    : > "$dir/targets.txt"
+    echo "criado: ${dir/#"$HOME"/\~}"
+fi
+
+mkdir -p "$(dirname "$ACTIVE")"
+printf '%s\n' "$alvo" > "$ACTIVE"
+command -v zoxide >/dev/null 2>&1 && zoxide add "$dir"
+
+if command -v tmux >/dev/null 2>&1; then
+    exec "${HOME}/.local/bin/sessao" "$dir"
+fi
+echo "ativo: $alvo (tmux ausente: cd $dir)"

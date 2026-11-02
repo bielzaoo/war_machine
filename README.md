@@ -1,7 +1,9 @@
 # war_machine
 
+[![lint](https://github.com/bielzaoo/war_machine/actions/workflows/lint.yml/badge.svg)](https://github.com/bielzaoo/war_machine/actions/workflows/lint.yml)
+
 Bootstrap de uma VM Kali Linux enxuta: i3 + kitty/Alacritty + tmux +
-zsh/starship, tema vanta black + cyan (`#00f0ff`), com terminal "vidro" sem
+zsh/starship + eza/zoxide/fzf, tema vanta black + cyan (`#00f0ff`), com terminal "vidro" sem
 compositor (ver [Terminal vidro](#terminal-vidro-sem-picom)).
 
 Resultado esperado na base mínima: **~2.5 GB em disco**, **~520 MB de RAM em
@@ -61,6 +63,10 @@ Precisa de um tarball em vez de clone? `git archive --format=tar.gz
 
 | Flag | Efeito |
 |---|---|
+| `--tools` | instala o [perfil de ferramentas](#perfil---tools) AD + web |
+| `--dry-run` | só lista o que faria (pacotes, arquivos, serviços); não altera nada |
+| `--tz=ZONA` | fuso horário (padrão `America/Sao_Paulo`, NTP ligado) |
+| `--no-tz` | não mexe no fuso |
 | `--no-ssh` | não instala nem endurece o `sshd` |
 | `--no-font` | pula o download da Nerd Font (~30 MB) |
 | `--no-glass` | sem kitty/ImageMagick: só Alacritty sólido (o mais leve) |
@@ -90,7 +96,64 @@ duplicados.
 | `Mod+Tab` | workspace anterior | | | |
 
 Screenshots vão para `~/Pictures/screenshots/` **e** para a área de
-transferência.
+transferência. Com um engagement ativo, vão para `<alvo>/screens/`.
+
+### tmux (prefix `Ctrl+Space`, `Ctrl+a` também vale)
+
+Mesmos atalhos do host (dotfiles, esquema Omarchy). O que é usado toda hora
+não precisa de prefix:
+
+| Tecla | Ação | | Tecla | Ação |
+|---|---|---|---|---|
+| `Ctrl+Alt+setas` | muda de painel | | `Ctrl+Alt+Shift+setas` | redimensiona painel |
+| `Alt+1..9` | vai pra janela N | | `Alt+←/→` | janela anterior/próxima |
+| `Alt+Shift+←/→` | move a janela | | `Alt+↑/↓` | sessão anterior/próxima |
+| `prefix h` | divide (um embaixo do outro) | | `prefix v` | divide (lado a lado) |
+| `prefix x` | fecha painel | | `prefix k` / `K` | fecha janela / sessão |
+| `prefix c` / `C` | nova janela / sessão (mesma pasta) | | `prefix r` / `R` | renomeia janela / sessão |
+| `prefix f` | sessionizer (pasta do zoxide vira sessão) | | `prefix L` | liga/desliga log do painel |
+| `prefix [` | copy mode (`v` seleciona, `y` copia) | | `prefix q` | recarrega a config |
+
+Cópia vai pro clipboard do X (`xclip`). Status no topo, `REC` em vermelho no
+painel que está gravando.
+
+> **virt-manager:** `Ctrl+Alt` é o atalho que solta o teclado da VM. Se
+> `Ctrl+Alt+setas` soltar o mouse em vez de trocar de painel, troque o atalho
+> em *Edit → Preferences → Console → Grab keys* (ex.: `Ctrl+Alt+Shift+F12`).
+
+### Shell
+
+`ls` é o `eza` (ícones, pastas primeiro; `ll`, `la`, `lt` em árvore) e `cd` é o
+`zoxide`: `cd caminho` funciona igual, `cd parte-do-nome` pula pra pasta
+frequente, `cdi` escolhe no fzf. O `cd` original segue em `builtin cd`. fzf no
+`Ctrl+R` (histórico), `Ctrl+T` (arquivo) e `Alt+C` (pasta).
+
+## Engagements
+
+```bash
+engage htb-certified     # cria/reabre ~/engagements/htb-certified e entra na sessão tmux
+engage                   # mostra o ativo e lista os existentes
+engage -x                # desmarca o ativo
+```
+
+Estrutura criada (pasta `700`: tem loot e credencial):
+
+```
+~/engagements/<alvo>/
+├── nmap/  web/  loot/  screens/  logs/
+├── notes/README.md    # escopo, credenciais, achados, timeline
+└── targets.txt
+```
+
+O engagement ativo:
+
+- aparece na barra do i3 (amarelo), ao lado do **IP da `tun0`** (VPN do
+  HTB/THM/OSCP, o `LHOST` do reverse shell; some quando a VPN cai);
+- recebe os screenshots (`Mod+Shift+S` / `Print`) em `screens/`;
+- **grava todo painel tmux aberto dentro da pasta** em `logs/` (saída crua do
+  terminal, leia com `less -R`). É a evidência pro relatório, sem depender de
+  lembrar de ligar. Fora de engagement, `prefix L` grava em
+  `~/.local/state/war_machine/tmux-logs/`.
 
 ## Wallpaper
 
@@ -150,7 +213,7 @@ não o padrão: se travar, volte com `accel3d=no` e `gl.enable=no`.
 `xkb-data`, `x11-xserver-utils`
 
 **Stack:** `i3-wm`, `i3status`, `i3lock`, `dmenu`, `alacritty`, `tmux`, `zsh`,
-`starship`, `dunst`, `feh`, `maim`, `xclip`, `network-manager`, `spice-vdagent`,
+`starship`, `eza`, `zoxide`, `fzf`, `dunst`, `feh`, `maim`, `xclip`, `network-manager`, `spice-vdagent`,
 `firefox-esr`, `dnsutils`, `git`, `build-essential`
 
 **Tema:** `adwaita-icon-theme`, `gnome-themes-extra`, `xsettingsd`
@@ -160,11 +223,26 @@ não o padrão: se travar, volte com `accel3d=no` e `gl.enable=no`.
 Rede é gerenciada por `nmtui` / `nmcli` — sem applet de bandeja, para não
 arrastar dependências GTK do GNOME.
 
-**Ferramentas de pentest ficam de fora por escolha** — instale sob demanda.
-Todas estão no repositório oficial do Kali:
+### Perfil `--tools`
+
+Sem `--tools` nenhuma ferramenta de pentest entra. Com ele, um recorte focado
+em **AD** (trilha CRTP/CARTP) e **web** (Burp), sem o metapacote de 12 GB:
+
+| Grupo | Pacotes |
+|---|---|
+| AD | `nmap` `netexec` `impacket-scripts` `python3-impacket` `evil-winrm` `bloodhound.py` `certipy-ad` `responder` `enum4linux-ng` `smbclient` `smbmap` `ldap-utils` `krb5-user` `kerbrute` `hashcat` `john` |
+| Web | `burpsuite` `ffuf` `feroxbuster` `gobuster` `sqlmap` `whatweb` |
+| Base | `seclists` `wordlists` `proxychains4` `chisel` `ligolo-ng` `socat` `rlwrap` `netcat-traditional` |
+
+Pacote que não estiver no repo naquele momento é pulado com aviso, sem
+derrubar o resto. A GUI do BloodHound CE (Neo4j + Postgres) fica de fora: roda
+melhor no host com `docker compose`, e o `bloodhound.py` da VM gera os JSON.
+`krb5-user` entra sem perguntar o realm: ajuste o `/etc/krb5.conf` por lab.
+
+Fora do perfil, sob demanda:
 
 ```bash
-sudo apt install -y sqlmap nikto ffuf wpscan masscan netexec metasploit-framework exploitdb
+sudo apt install -y nikto wpscan masscan metasploit-framework exploitdb
 ```
 
 ---
@@ -313,6 +391,9 @@ e aperte uma seta no menu. Caiu na voz? `sudo virsh destroy kali` e
 - **`spice-vdagentd` é ativado por socket.** `systemctl enable spice-vdagentd`
   falha por não haver seção `[Install]` — o alvo correto é
   `spice-vdagentd.socket`.
+- **Relógio da VM fora do host.** Instalado com locale `en_US` ou sem rede, o
+  Kali fica em UTC ou num fuso errado. O script ajusta pra `--tz` (padrão
+  `America/Sao_Paulo`) e liga o NTP.
 - **starship no zsh** precisa de `zmodload zsh/mathfunc` antes do `init`, senão
   cada comando imprime `__starship_get_time: unknown function: int`.
 
@@ -349,6 +430,12 @@ O fluxo correto:
 3. **Teste a conexão por chave antes de qualquer outra coisa**
 4. Rode `./install.sh` novamente — ele detecta o `authorized_keys` e só então
    desabilita a autenticação por senha
+
+O endurecimento vai em `/etc/ssh/sshd_config.d/00-war-machine.conf`, não no
+`sshd_config`. O sshd fica com o **primeiro** valor que lê, e o `Include` do
+`sshd_config.d/` está no topo do arquivo: editar o corpo do `sshd_config` com
+`sed` perde pra qualquer drop-in que diga `PasswordAuthentication yes`. O
+script valida com `sshd -t` antes do restart e, se falhar, remove o drop-in.
 
 Se não houver `~/.ssh/authorized_keys`, o script avisa e **não** desabilita a
 senha, para não se trancar do lado de fora.

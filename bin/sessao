@@ -1,0 +1,16 @@
+#!/bin/sh
+# Sessionizer (igual ao do host): escolhe uma pasta do zoxide no fzf e entra
+# na sessao tmux com o nome dela (cria se nao existir). Dentro do tmux troca
+# de sessao; fora, anexa. No tmux: prefix f (popup). Uso: sessao [pasta]
+set -e
+dir=${1:-$(zoxide query -l | fzf --prompt 'sessao> ' --scheme=path)}
+[ -n "$dir" ] || exit 0
+dir=$(cd "$dir" && pwd)
+# tmux nao aceita . nem : no nome da sessao
+nome=$(basename "$dir" | tr '.:' '__')
+tmux has-session -t "=$nome" 2>/dev/null || tmux new-session -d -s "$nome" -c "$dir"
+if [ -n "${TMUX:-}" ]; then
+    tmux switch-client -t "=$nome"
+else
+    exec tmux attach -t "=$nome"
+fi

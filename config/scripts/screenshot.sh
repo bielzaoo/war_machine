@@ -6,6 +6,12 @@ set -u
 
 MODE="${1:-region}"
 DIR="${HOME}/Pictures/screenshots"
+# engagement ativo (engage <alvo>): screenshot vira evidencia na pasta dele
+ACTIVE="${HOME}/.config/war_machine/engagement"
+ENG_ROOT="${WAR_ENGAGEMENTS:-${HOME}/engagements}"
+if [ -s "$ACTIVE" ] && [ -d "${ENG_ROOT}/$(cat "$ACTIVE")" ]; then
+    DIR="${ENG_ROOT}/$(cat "$ACTIVE")/screens"
+fi
 mkdir -p "$DIR"
 FILE="${DIR}/$(date +%Y-%m-%d_%H-%M-%S).png"
 

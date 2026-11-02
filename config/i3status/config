@@ -7,11 +7,27 @@ general {
     separator = "  "
 }
 
+order += "read_file engagement"
+order += "ethernet tun0"
 order += "ethernet _first_"
 order += "cpu_usage"
 order += "memory"
 order += "disk /"
 order += "tztime local"
+
+# engagement ativo (escrito pelo `engage`); some quando nao ha nenhum
+read_file engagement {
+    path = "~/.config/war_machine/engagement"
+    format = "󰓾 %content"
+    format_bad = ""
+    color_good = "#ffb800"
+}
+
+# VPN de lab (HTB/THM/OSCP): o IP que vai no LHOST do reverse shell
+ethernet tun0 {
+    format_up   = "󰖂 %ip"
+    format_down = ""
+}
 
 ethernet _first_ {
     format_up   = "  %ip"
