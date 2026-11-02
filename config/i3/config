@@ -34,7 +34,8 @@ client.urgent           $urgent   $bg         $fg    $urgent    $urgent
 client.background       $bg
 
 # --- Autostart --------------------------------------------------------
-exec --no-startup-id $HOME/.config/scripts/wallpaper.sh
+# exec_always: roda de novo no Mod+Shift+C (exec so roda no login)
+exec_always --no-startup-id $HOME/.config/scripts/wallpaper.sh
 exec --no-startup-id xrdb -merge $HOME/.Xresources
 exec --no-startup-id xsettingsd
 exec --no-startup-id /usr/bin/spice-vdagent
