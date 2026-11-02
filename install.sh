@@ -395,9 +395,11 @@ ImageMagick estiver instalado, ou preto solido se nao.
 Se houver mais de uma, a primeira em ordem alfabetica e usada.
 
 O fundo do terminal kitty e a mesma imagem desfocada e escurecida,
-gerada uma vez em ~/.cache/war_machine/term-bg.png. Para escurecer
-mais/menos (0-100, padrao 62):
-    echo 75 > ~/.config/war_machine/dim     e depois Mod+Shift+C
+gerada uma vez em ~/.cache/war_machine/term-bg.png. O escurecimento e
+automatico pelo brilho da imagem (wallpaper claro escurece mais). Para
+fixar um valor (0-100, mais alto = mais escuro):
+    echo 85 > ~/.config/war_machine/dim     e depois Mod+Shift+C
+Apagar esse arquivo volta ao automatico.
 EOF
 fi
 

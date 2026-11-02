@@ -178,11 +178,17 @@ O truque aqui é **não compor nada em tempo real**:
 3. No i3 em tiling, atrás do terminal só existe o wallpaper — então o "vidro
    fosco" fica visualmente igual ao efeito real.
 
+O escurecimento é **automático pelo brilho da imagem**: o script mede o
+brilho médio do wallpaper e escurece até um alvo fixo (fator `0.10 / média`,
+preso entre `0.15` e `0.38`). Wallpaper escuro fica como estava; um claro
+escurece bem mais (o branco vira no máximo ~15% de brilho), e a saturação cai
+30%, pra cor viva não disputar com o texto.
+
 Ajustes:
 
 | Quero | Faço |
 |---|---|
-| texto mais legível / fundo mais escuro | `echo 75 > ~/.config/war_machine/dim` + `Mod+Shift+C` (0-100, padrão 62) |
+| texto mais legível / fundo mais escuro | `echo 85 > ~/.config/war_machine/dim` + `Mod+Shift+C` (0-100, fixo; apagar o arquivo volta ao automático) |
 | desligar o vidro nos próximos terminais | `Mod+Shift+G` (de novo religa) |
 | um terminal o mais leve possível agora | `Mod+Shift+Enter` (Alacritty sólido) |
 | nunca instalar kitty/ImageMagick | `./install.sh --no-glass` |
