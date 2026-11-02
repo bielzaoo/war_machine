@@ -85,7 +85,8 @@ duplicados.
 |---|---|---|---|---|
 | `Mod+Enter` | terminal (vidro) | | `Mod+D` | dmenu |
 | `Mod+Shift+Enter` | terminal sólido | | `Mod+Shift+G` | liga/desliga vidro |
-| `Mod+Q` | fechar janela | | `Mod+F` | fullscreen |
+| `Mod+Q` | fechar janela | | `Mod+Shift+F` | fullscreen |
+| `Mod+F` | arquivos (Thunar; abre no engagement ativo) | | | |
 | `Mod+H/J/K/L` | foco | | `Mod+Shift+H/J/K/L` | mover janela |
 | `Mod+1..0` | workspace | | `Mod+Shift+1..0` | mover p/ workspace |
 | `Mod+B` / `Mod+V` | split h / v | | `Mod+R` | modo resize |
@@ -213,7 +214,7 @@ não o padrão: se travar, volte com `accel3d=no` e `gl.enable=no`.
 `xkb-data`, `x11-xserver-utils`
 
 **Stack:** `i3-wm`, `i3status`, `i3lock`, `dmenu`, `alacritty`, `tmux`, `zsh`,
-`starship`, `eza`, `zoxide`, `fzf`, `dunst`, `feh`, `maim`, `xclip`, `network-manager`, `spice-vdagent`,
+`starship`, `eza`, `zoxide`, `fzf`, `thunar`, `tumbler`, `dunst`, `feh`, `maim`, `xclip`, `network-manager`, `spice-vdagent`,
 `firefox-esr`, `dnsutils`, `git`, `build-essential`
 
 **Tema:** `adwaita-icon-theme`, `gnome-themes-extra`, `xsettingsd`

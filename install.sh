@@ -173,7 +173,9 @@ xkb-data
 x11-xserver-utils
 "
 
-# Resto da stack: recommends cortado com seguranca
+# Resto da stack: recommends cortado com seguranca. Thunar sem recommends
+# fica sem gvfs/volman (lixeira e montagem automatica): numa VM nao faz falta.
+# tumbler gera as miniaturas (screenshots de evidencia).
 PKGS_MIN="
 i3-wm
 i3status
@@ -204,6 +206,8 @@ build-essential
 dnsutils
 spice-vdagent
 firefox-esr
+thunar
+tumbler
 "
 
 info "instalando camada grafica (com recommends)"
@@ -370,7 +374,7 @@ export XCURSOR_SIZE=24'
 
 run mkdir -p "${HOME}/.config/scripts" "${HOME}/.config/wallpapers" \
     "${HOME}/Pictures/screenshots" "${HOME}/.local/bin"
-for s in wallpaper.sh screenshot.sh term.sh vm-autoresize.sh tmux-log.sh; do
+for s in wallpaper.sh screenshot.sh term.sh vm-autoresize.sh tmux-log.sh files.sh; do
     install_config "${CONFIG_SRC}/scripts/${s}" "${HOME}/.config/scripts/${s}"
     run chmod +x "${HOME}/.config/scripts/${s}"
 done
@@ -598,7 +602,8 @@ cat << 'EOF'
   Atalhos principais (Mod = Super):
     Mod+Enter          terminal (vidro)  Mod+D              dmenu
     Mod+Shift+Enter    terminal solido   Mod+Shift+G        liga/desliga vidro
-    Mod+Q              fechar janela     Mod+F              fullscreen
+    Mod+Q              fechar janela     Mod+Shift+F        fullscreen
+    Mod+F              arquivos (Thunar)
     Mod+H/J/K/L        foco              Mod+Shift+H/J/K/L  mover janela
     Mod+1..0           workspace         Mod+Shift+1..0     mover p/ workspace
     Mod+B / Mod+V      split h / v       Mod+R              modo resize

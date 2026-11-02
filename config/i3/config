@@ -81,7 +81,7 @@ bindsym $mod+Shift+Right move right
 # --- Layout -----------------------------------------------------------
 bindsym $mod+b split h
 bindsym $mod+v split v
-bindsym $mod+f fullscreen toggle
+bindsym $mod+Shift+f fullscreen toggle
 bindsym $mod+s layout stacking
 bindsym $mod+w layout tabbed
 bindsym $mod+e layout toggle split
@@ -124,6 +124,10 @@ bindsym $mod+Shift+9 move container to workspace number $ws9
 bindsym $mod+Shift+0 move container to workspace number $ws10
 
 bindsym $mod+Tab workspace back_and_forth
+
+# --- Arquivos ---------------------------------------------------------
+# Thunar na pasta do engagement ativo (ou no $HOME)
+bindsym $mod+f exec --no-startup-id $HOME/.config/scripts/files.sh
 
 # --- Screenshot -------------------------------------------------------
 # Regiao selecionada -> area de transferencia + arquivo
